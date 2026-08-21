@@ -34,10 +34,13 @@ export const AGE_GROUP_META: Record<AgeGroup, { label: string; color: string }> 
   adult: { label: 'Adult', color: colors.adult },
 };
 
-export const RATING_META: Record<EatingRating, { label: string; emoji: string }> = {
-  not_well: { label: 'Not well', emoji: '😕' },
-  okay: { label: 'Okay', emoji: '🙂' },
-  very_well: { label: 'Very well', emoji: '😋' },
+export const EATING_RATING_OPTIONS: EatingRating[] = ['not_eaten', 'ate_little', 'ate_okay', 'ate_very_well'];
+
+export const RATING_META: Record<EatingRating, { label: string; shortLabel: string; description: string }> = {
+  not_eaten: { label: 'Did not eat', shortLabel: 'Did not eat', description: 'No meaningful amount was eaten.' },
+  ate_little: { label: 'Ate a little', shortLabel: 'A little', description: 'Only a small amount was eaten.' },
+  ate_okay: { label: 'Ate okay', shortLabel: 'Okay', description: 'An ordinary or reasonable amount was eaten.' },
+  ate_very_well: { label: 'Ate very well', shortLabel: 'Very well', description: 'Most or all of the meal was eaten.' },
 };
 
 // A compact, food-specific selection rather than the full Ionicons catalogue.

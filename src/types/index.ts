@@ -4,7 +4,10 @@ export type AgeGroup = 'toddler' | 'adult';
 export type Effort = 'quick' | 'medium' | 'tedious';
 export type MealType = 'breakfast' | 'lunch' | 'snack' | 'dinner';
 export type Nutrient = 'protein' | 'calcium' | 'vitC' | 'iron';
-export type EatingRating = 'not_well' | 'okay' | 'very_well';
+// A structured, reportable outcome for one family member's meal assignment.
+// The assignment also retains its date, meal type, and foods, so this can be
+// aggregated into future eating trends without changing the stored schema.
+export type EatingRating = 'not_eaten' | 'ate_little' | 'ate_okay' | 'ate_very_well';
 export type FoodIcon = keyof typeof Ionicons.glyphMap;
 
 export interface FamilyMember {
@@ -29,6 +32,7 @@ export interface Food {
   isVeggiePortion: boolean;
   isFruitPortion: boolean;
   icon?: FoodIcon;
+  note?: string;
   recipe?: Recipe;
   updatedAt: string;
 }
@@ -50,6 +54,7 @@ export interface FoodEntry {
 export interface MealAssignment {
   familyMemberId: string;
   foods: FoodEntry[];
+  // Categorical rather than display-oriented, ready for future reporting.
   eatingRating?: EatingRating;
 }
 

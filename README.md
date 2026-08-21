@@ -1,4 +1,4 @@
-# Menu Craft
+# Meal Craft
 
 A family meal planner: define family members, tag foods, plan a week of
 breakfast/lunch/snack/dinner per person, and get live feedback against
@@ -29,7 +29,7 @@ of Phase 1/2's features, not a rebuild of them.
 - Tab bar's "Family" tab is now labeled **"Settings"** to match the mockup (same screen/functionality underneath — the route name stayed `Family` internally so nothing else had to change)
 
 **Assumptions made where the mockup was ambiguous (worth checking against what you actually want):**
-- App name stayed **"Menu Craft"** — the mockup's frames say "NutriPlan," which I read as the design tool's placeholder branding rather than a rename request. Easy to change if you did want that name.
+- App name is **"Meal Craft"**. The mockup's frames say "NutriPlan," which is treated as the design tool's placeholder branding.
 - The "shared meal" feature only triggers when *every* family member's plan matches exactly. If some people are empty and others match, it falls back to per-person rows rather than guessing whether the empty ones should be included.
 - "Today" vs "selected day" in the day-pill row: the mockup only showed one static state, so I made today's date number appear in the accent coral color while the actively-selected day gets the filled teal pill — these are visually distinct now, where the mockup screenshot didn't have to show both at once.
 - Auto-icon selection for Food Library cards is a keyword guess against the food name, not a manual picker — occasionally wrong for unusual names, but zero extra data entry.
@@ -50,12 +50,12 @@ of Phase 1/2's features, not a rebuild of them.
 2. **Install the Expo Go app** on your phone — search "Expo Go" in the App Store (iOS) or Play Store (Android).
 3. **Create a fresh Expo project:**
    ```
-   npx create-expo-app@latest menu-craft --template blank-typescript
+   npx create-expo-app@latest meal-craft --template blank-typescript
    ```
 4. **Copy this project's files into it**, overwriting where prompted: `App.tsx`, `app.json`, `babel.config.js`, `package.json`, and the entire `src/` folder.
 5. **Install:**
    ```
-   cd menu-craft
+   cd meal-craft
    npm install
    ```
 6. **Double-check SDK alignment** (safe to always run):
@@ -92,6 +92,20 @@ src/
     library/                   Food Library list (now with filters) + edit/create form
     goals/                     redesigned: segmented control, progress/configure modes
 ```
+
+## Future enhancements
+
+- Generate a shopping list from planned recipes, grouped by ingredient or supermarket section.
+- Drag, drop, and duplicate individual meals between days.
+- Add an explicit “plan for everyone” action for shared meals, instead of relying only on automatic shared-meal detection.
+- Track pantry ingredients and suggest meals that use what is already available.
+- Pin favourite foods and surface recently used foods at the top of the picker.
+- Add day- or meal-level notes, such as “defrost chicken” or “kids loved this.”
+- Provide goal-aware meal suggestions, such as an iron-rich food when the weekly target is behind.
+- Add photos to recipes and richer visual food cards.
+- Export or share a weekly menu as an image or PDF.
+- Send reminders for meal preparation and grocery shopping.
+- Archive foods that are no longer in rotation without permanently deleting them.
 
 ## Next steps
 

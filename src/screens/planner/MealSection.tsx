@@ -16,7 +16,7 @@ interface Props {
   onAddPress: (familyMemberId: string) => void;
   onChipPress: (familyMemberId: string, entry: FoodEntry) => void;
   onRemove: (familyMemberId: string, entryId: string) => void;
-  onRatingChange: (familyMemberId: string, rating: EatingRating | undefined) => void;
+  onRatingPress: (familyMemberId: string, rating: EatingRating | undefined) => void;
 }
 
 function resolveLabel(entry: FoodEntry, foods: Food[]): string {
@@ -65,7 +65,7 @@ function AddButton({ onPress, compact }: { onPress: () => void; compact: boolean
   );
 }
 
-export function MealSection({ day, mealType, members, plan, foods, onAddPress, onChipPress, onRemove, onRatingChange }: Props) {
+export function MealSection({ day, mealType, members, plan, foods, onAddPress, onChipPress, onRemove, onRatingPress }: Props) {
   const meta = MEAL_TYPES.find((m) => m.key === mealType)!;
   const slot = plan.slots.find((s) => s.day === day && s.mealType === mealType);
 
@@ -76,6 +76,8 @@ export function MealSection({ day, mealType, members, plan, foods, onAddPress, o
   // rows the moment anyone's plan diverges.
   const sharedLabels = useMemo(() => {
     if (members.length < 2) return null;
+    // Eating outcomes belong to each toddler, so keep those assignments visible individually.
+    if (members.some((member) => member.trackEatingRating)) return null;
     const perMember = members.map((m) => {
       const assignment = slot?.assignments.find((a) => a.familyMemberId === m.id);
       const labels = (assignment?.foods ?? []).map((e) => resolveLabel(e, foods)).sort();
@@ -151,23 +153,18 @@ export function MealSection({ day, mealType, members, plan, foods, onAddPress, o
                   <AddButton compact={false} onPress={() => onAddPress(member.id)} />
                 )}
 
-                {member.trackEatingRating && hasFoods && (
-                  <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(120)} style={styles.ratingRow}>
-                    {(Object.keys(RATING_META) as EatingRating[]).map((r) => (
-                      <TouchableOpacity
-                        key={r}
-                        onPress={() => onRatingChange(member.id, assignment!.eatingRating === r ? undefined : r)}
-                        style={[styles.ratingBtn, assignment!.eatingRating === r && styles.ratingBtnActive]}
-                      >
-                        <Text style={{ fontSize: 14 }}>{RATING_META[r].emoji}</Text>
-                      </TouchableOpacity>
-                    ))}
-                    {assignment!.eatingRating && (
-                      <Text style={styles.ratingLabel}>{RATING_META[assignment!.eatingRating].label}</Text>
-                    )}
-                  </Animated.View>
-                )}
               </View>
+              {member.trackEatingRating && hasFoods && (
+                <TouchableOpacity
+                  onPress={() => onRatingPress(member.id, assignment!.eatingRating)}
+                  style={[styles.ratingTrigger, assignment!.eatingRating && styles.ratingTriggerSelected]}
+                >
+                  <Ionicons name="clipboard-outline" size={15} color={assignment!.eatingRating ? colors.primary : colors.textSecondary} />
+                  <Text style={[styles.ratingTriggerText, assignment!.eatingRating && styles.ratingTriggerTextSelected]}>
+                    {assignment!.eatingRating ? RATING_META[assignment!.eatingRating].shortLabel : 'Record'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           );
         })
@@ -227,16 +224,18 @@ const styles = StyleSheet.create({
   sharedAvatars: { flexDirection: 'row' },
   sharedAvatarWrap: { borderWidth: 2, borderColor: colors.surfaceMint, borderRadius: 999 },
   sharedLabel: { fontSize: 10, fontFamily: fontFamily.monoBold, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.textSecondary, marginTop: 2 },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-  ratingBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.surface,
+  ratingTrigger: {
+    minWidth: 58,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.sm,
+    marginLeft: spacing.sm,
   },
-  ratingBtnActive: { backgroundColor: colors.primaryMuted },
-  ratingLabel: { fontSize: 10, fontFamily: fontFamily.monoBold, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.textSecondary, marginLeft: 2 },
+  ratingTriggerSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+  ratingTriggerText: { fontSize: 9, fontFamily: fontFamily.monoBold, textTransform: 'uppercase', letterSpacing: 0.3, color: colors.textSecondary, marginTop: 3, textAlign: 'center' },
+  ratingTriggerTextSelected: { color: colors.primary },
 });

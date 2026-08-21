@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Menu Craft",
-    "slug": "menu-craft",
+    "name": "Meal Craft",
+    "slug": "meal-craft",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",

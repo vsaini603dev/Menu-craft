@@ -101,6 +101,7 @@ export function FoodLibraryScreen() {
                     <Chip key={n} label={NUTRIENT_META[n].label} />
                   ))}
                 </View>
+                {!!item.note && <Text style={styles.foodNote} numberOfLines={1}>{item.note}</Text>}
               </View>
               <TouchableOpacity onPress={() => confirmDelete(item.id, item.name)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ marginLeft: 4 }}>
                 <Ionicons name="trash-outline" size={16} color={colors.textSecondary} />
@@ -139,4 +140,5 @@ const styles = StyleSheet.create({
   foodName: { flex: 1, fontSize: 13, fontFamily: fontFamily.monoBold, letterSpacing: 0.3, color: colors.textPrimary, marginRight: spacing.sm },
   effortLabel: { fontSize: 9, fontFamily: fontFamily.mono, color: colors.textSecondary, letterSpacing: 0.4 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap' },
+  foodNote: { fontSize: 11, fontStyle: 'italic', color: colors.textSecondary, marginTop: spacing.xs },
 });

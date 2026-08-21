@@ -12,7 +12,7 @@ import { generateId } from '../../lib/id';
 import * as Haptics from 'expo-haptics';
 
 export interface FoodPickerSheetHandle {
-  open: (familyMember: FamilyMember, onSelect: (entry: FoodEntry) => void) => void;
+  open: (familyMember: FamilyMember, onSelect: (entry: FoodEntry) => void, prioritizedFoodIds?: string[]) => void;
 }
 
 const EFFORTS: Effort[] = ['quick', 'medium', 'tedious'];
@@ -37,12 +37,14 @@ export const FoodPickerSheet = forwardRef<FoodPickerSheetHandle, {}>((_props, re
 
   const [familyMember, setFamilyMember] = useState<FamilyMember | null>(null);
   const onSelectRef = useRef<(entry: FoodEntry) => void>(() => {});
+  const [prioritizedFoodIds, setPrioritizedFoodIds] = useState<string[]>([]);
 
   const [search, setSearch] = useState('');
   const [effortFilter, setEffortFilter] = useState<Effort | null>(null);
   const [ageFilterOn, setAgeFilterOn] = useState(true);
 
   const [quickName, setQuickName] = useState('');
+  const [quickNote, setQuickNote] = useState('');
   const [quickNutrients, setQuickNutrients] = useState<Nutrient[]>([]);
   const [quickVeggie, setQuickVeggie] = useState(false);
   const [quickFruit, setQuickFruit] = useState(false);
@@ -51,9 +53,10 @@ export const FoodPickerSheet = forwardRef<FoodPickerSheetHandle, {}>((_props, re
   const snapPoints = useMemo(() => ['70%', '92%'], []);
 
   useImperativeHandle(ref, () => ({
-    open: (member, onSelect) => {
+    open: (member, onSelect, priorityFoodIds = []) => {
       setFamilyMember(member);
       onSelectRef.current = onSelect;
+      setPrioritizedFoodIds(priorityFoodIds);
       setSearch('');
       setEffortFilter(null);
       setAgeFilterOn(true);
@@ -64,6 +67,7 @@ export const FoodPickerSheet = forwardRef<FoodPickerSheetHandle, {}>((_props, re
 
   const resetQuickAdd = () => {
     setQuickName('');
+    setQuickNote('');
     setQuickNutrients([]);
     setQuickVeggie(false);
     setQuickFruit(false);
@@ -73,13 +77,18 @@ export const FoodPickerSheet = forwardRef<FoodPickerSheetHandle, {}>((_props, re
   const ageGroup = familyMember?.ageGroup ?? 'adult';
 
   const filtered = useMemo(() => {
-    return foods.filter((f) => {
-      if (ageFilterOn && !f.suitableFor.includes(ageGroup)) return false;
-      if (effortFilter && f.effort !== effortFilter) return false;
-      if (search && !f.name.toLowerCase().includes(search.toLowerCase())) return false;
-      return true;
-    });
-  }, [foods, ageGroup, ageFilterOn, effortFilter, search]);
+    const priorityIds = new Set(prioritizedFoodIds);
+    return foods
+      .filter((f) => {
+        // A food already chosen for another family member is kept visible so it can be shared,
+        // even when the age filter would ordinarily hide it.
+        if (ageFilterOn && !f.suitableFor.includes(ageGroup) && !priorityIds.has(f.id)) return false;
+        if (effortFilter && f.effort !== effortFilter) return false;
+        if (search && !f.name.toLowerCase().includes(search.toLowerCase())) return false;
+        return true;
+      })
+      .sort((a, b) => Number(priorityIds.has(b.id)) - Number(priorityIds.has(a.id)) || a.name.localeCompare(b.name));
+  }, [foods, ageGroup, ageFilterOn, effortFilter, search, prioritizedFoodIds]);
 
   const handlePickLibraryFood = (food: Food) => {
     onSelectRef.current({ id: generateId('entry_'), source: 'library', foodId: food.id });
@@ -102,6 +111,7 @@ export const FoodPickerSheet = forwardRef<FoodPickerSheetHandle, {}>((_props, re
         nutrients: quickNutrients,
         isVeggiePortion: quickVeggie,
         isFruitPortion: quickFruit,
+        note: quickNote.trim() || undefined,
       });
       onSelectRef.current({ id: generateId('entry_'), source: 'library', foodId: newFood.id });
     } else {
@@ -178,7 +188,10 @@ export const FoodPickerSheet = forwardRef<FoodPickerSheetHandle, {}>((_props, re
           keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => (
             <TouchableOpacity style={styles.foodRow} onPress={() => handlePickLibraryFood(item)}>
-              <Text style={typography.body}>{item.name}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={typography.body}>{item.name}</Text>
+                {prioritizedFoodIds.includes(item.id) && <Text style={styles.sharedChoiceLabel}>Selected for another family member</Text>}
+              </View>
               <Text style={typography.small}>{EFFORT_META[item.effort].label}</Text>
             </TouchableOpacity>
           )}
@@ -196,6 +209,15 @@ export const FoodPickerSheet = forwardRef<FoodPickerSheetHandle, {}>((_props, re
             value={quickName}
             onChangeText={setQuickName}
           />
+          {saveToLibrary && (
+            <BottomSheetTextInput
+              style={styles.quickNoteInput}
+              placeholder="Optional food note"
+              placeholderTextColor={colors.textSecondary}
+              value={quickNote}
+              onChangeText={setQuickNote}
+            />
+          )}
           <View style={styles.chipWrap}>
             {NUTRIENTS.map((n) => (
               <Chip
@@ -244,6 +266,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  sharedChoiceLabel: { fontSize: 10, fontFamily: fontFamily.mono, color: colors.primary, marginTop: 2 },
   quickAdd: {
     marginTop: spacing.sm,
     backgroundColor: colors.surfaceMint,
@@ -252,6 +275,16 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+  },
+  quickNoteInput: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: 12,
+    fontFamily: fontFamily.mono,
+    marginBottom: spacing.sm,
+    color: colors.textPrimary,
   },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', marginTop: spacing.xs },
   saveRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: spacing.sm },

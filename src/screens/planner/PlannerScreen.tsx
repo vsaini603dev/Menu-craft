@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
+  Alert,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from 'react-native';
@@ -21,6 +22,7 @@ import { NutritionHUD } from './NutritionHUD';
 import { MealSection } from './MealSection';
 import { FoodPickerSheet, FoodPickerSheetHandle } from './FoodPickerSheet';
 import { FoodDetailSheet, FoodDetailSheetHandle } from './FoodDetailSheet';
+import { EatingRatingSheet, EatingRatingSheetHandle } from './EatingRatingSheet';
 import { getWeekId, getWeekDates, addWeeks, formatWeekRangeLabel, isCurrentWeek, DAY_LABELS } from '../../lib/week';
 import { validateWeek } from '../../lib/validateWeek';
 import { colors, spacing, typography, radius, fontFamily } from '../../theme';
@@ -37,6 +39,7 @@ export function PlannerScreen() {
   const addFood = useWeekPlanStore((s) => s.addFood);
   const removeFood = useWeekPlanStore((s) => s.removeFood);
   const setEatingRating = useWeekPlanStore((s) => s.setEatingRating);
+  const copyDay = useWeekPlanStore((s) => s.copyDay);
 
   const [weekOffset, setWeekOffset] = useState(0);
   const weekId = useMemo(() => addWeeks(getWeekId(), weekOffset), [weekOffset]);
@@ -45,16 +48,21 @@ export function PlannerScreen() {
   const plan = storedPlan ?? getPlan(weekId);
 
   const [activeDay, setActiveDay] = useState(0);
+  const [copiedDay, setCopiedDay] = useState<{ weekId: string; day: number } | null>(null);
   const [activeMemberId, setActiveMemberId] = useState(members[0]?.id ?? '');
   const [hudExpanded, setHudExpanded] = useState(true);
   const listRef = useRef<FlatList>(null);
 
   const pickerRef = useRef<FoodPickerSheetHandle>(null);
   const detailRef = useRef<FoodDetailSheetHandle>(null);
+  const eatingRatingRef = useRef<EatingRatingSheetHandle>(null);
 
   const activeMember = members.find((m) => m.id === activeMemberId) ?? members[0];
   const activeGoals = useGoalsFor(activeMember?.id ?? '');
   const validation = activeMember ? validateWeek(plan, activeMember.id, foods, activeGoals) : null;
+  const activeDayHasMeals = plan.slots.some(
+    (slot) => slot.day === activeDay && slot.assignments.some((assignment) => assignment.foods.length > 0)
+  );
 
   const goToDay = (index: number) => {
     setActiveDay(index);
@@ -77,24 +85,42 @@ export function PlannerScreen() {
     }
   };
 
+  const copyActiveDay = () => {
+    setCopiedDay({ weekId, day: activeDay });
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const pasteCopiedDay = () => {
+    if (copiedDay == null || (copiedDay.weekId === weekId && copiedDay.day === activeDay)) return;
+
+    const targetHasMeals = plan.slots.some(
+      (slot) => slot.day === activeDay && slot.assignments.some((assignment) => assignment.foods.length > 0)
+    );
+    const paste = () => {
+      copyDay(copiedDay.weekId, copiedDay.day, weekId, activeDay);
+      setCopiedDay(null);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    };
+
+    if (targetHasMeals) {
+      Alert.alert(
+        `Replace ${DAY_LABELS[activeDay]}?`,
+        `Pasting ${DAY_LABELS[copiedDay.day]}'s meals will replace all meals currently planned for ${DAY_LABELS[activeDay]}.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Paste and replace', style: 'destructive', onPress: paste },
+        ]
+      );
+      return;
+    }
+
+    paste();
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.topBar}>
-        <Text style={styles.appTitle}>MENU CRAFT</Text>
-        <View style={{ flexDirection: 'row' }}>
-          {members.map((m, i) => (
-            <TouchableOpacity
-              key={m.id}
-              onPress={() => {
-                setActiveMemberId(m.id);
-                Haptics.selectionAsync();
-              }}
-              style={i > 0 ? { marginLeft: -10 } : undefined}
-            >
-              <Avatar name={m.name} ageGroup={m.ageGroup} size={30} selected={m.id === activeMemberId} />
-            </TouchableOpacity>
-          ))}
-        </View>
+        <Text style={styles.appTitle}>MEAL CRAFT</Text>
       </View>
 
       <View style={styles.weekHeader}>
@@ -133,6 +159,34 @@ export function PlannerScreen() {
         })}
       </ScrollView>
 
+      <View style={styles.dayActions}>
+        {copiedDay == null ? (
+          <TouchableOpacity
+            onPress={copyActiveDay}
+            disabled={!activeDayHasMeals}
+            style={[styles.dayActionButton, !activeDayHasMeals && styles.dayActionButtonDisabled]}
+          >
+            <Ionicons name="copy-outline" size={14} color={activeDayHasMeals ? colors.primary : colors.textSecondary} />
+            <Text style={[styles.dayActionText, !activeDayHasMeals && styles.dayActionTextDisabled]}>Copy {DAY_LABELS[activeDay]}</Text>
+          </TouchableOpacity>
+        ) : (
+          <>
+            <TouchableOpacity onPress={() => setCopiedDay(null)} style={styles.dayActionButton}>
+              <Ionicons name="close" size={14} color={colors.textSecondary} />
+              <Text style={styles.dayActionText}>{DAY_LABELS[copiedDay.day]} copied</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={pasteCopiedDay}
+              disabled={copiedDay.weekId === weekId && copiedDay.day === activeDay}
+              style={[styles.dayActionButton, (copiedDay.weekId !== weekId || copiedDay.day !== activeDay) && styles.pasteButton, copiedDay.weekId === weekId && copiedDay.day === activeDay && styles.dayActionButtonDisabled]}
+            >
+              <Ionicons name="clipboard-outline" size={14} color={copiedDay.weekId === weekId && copiedDay.day === activeDay ? colors.textSecondary : colors.textOnPrimary} />
+              <Text style={[styles.pasteButtonText, copiedDay.weekId === weekId && copiedDay.day === activeDay && styles.dayActionTextDisabled]}>Paste to {DAY_LABELS[activeDay]}</Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
+
       {members.length === 0 ? (
         <View style={{ padding: spacing.lg }}>
           <Text style={typography.body}>Add a family member in the Settings tab to start planning.</Text>
@@ -141,13 +195,31 @@ export function PlannerScreen() {
         <>
           <View style={styles.hudSection}>
             <TouchableOpacity onPress={() => setHudExpanded((e) => !e)} style={styles.hudToggle}>
-              <Text style={styles.hudToggleLabel}>
-                Weekly Goals: {activeMember?.name} ({activeMember?.ageGroup === 'toddler' ? 'Toddler' : 'Adult'})
-              </Text>
+              <Text style={styles.hudToggleLabel}>Weekly Goals</Text>
               <Ionicons name={hudExpanded ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textSecondary} />
             </TouchableOpacity>
             {hudExpanded && validation && activeMember && (
               <View style={styles.hudCard}>
+                <View style={styles.goalsMemberRow}>
+                  <Text style={styles.goalsMemberLabel}>GOALS FOR</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.goalsMemberScroll} contentContainerStyle={styles.goalsMemberList}>
+                    {members.map((member) => (
+                      <TouchableOpacity
+                        key={member.id}
+                        onPress={() => {
+                          setActiveMemberId(member.id);
+                          Haptics.selectionAsync();
+                        }}
+                        style={styles.goalsMemberButton}
+                      >
+                        <Avatar name={member.name} ageGroup={member.ageGroup} size={28} selected={member.id === activeMemberId} />
+                        <Text style={[styles.goalsMemberName, member.id === activeMemberId && styles.goalsMemberNameSelected]} numberOfLines={1}>
+                          {member.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
                 <NutritionHUD validation={validation} goals={activeGoals} />
               </View>
             )}
@@ -176,7 +248,17 @@ export function PlannerScreen() {
                     onAddPress={(familyMemberId) => {
                       const member = members.find((m) => m.id === familyMemberId);
                       if (!member) return;
-                      pickerRef.current?.open(member, (entry) => addFood(weekId, index, mt.key, familyMemberId, entry));
+                      const slot = plan.slots.find((candidate) => candidate.day === index && candidate.mealType === mt.key);
+                      const prioritizedFoodIds = (slot?.assignments ?? [])
+                        .filter((assignment) => assignment.familyMemberId !== familyMemberId)
+                        .flatMap((assignment) => assignment.foods)
+                        .filter((entry) => entry.source === 'library' && !!entry.foodId)
+                        .map((entry) => entry.foodId!);
+                      pickerRef.current?.open(
+                        member,
+                        (entry) => addFood(weekId, index, mt.key, familyMemberId, entry),
+                        prioritizedFoodIds
+                      );
                     }}
                     onChipPress={(familyMemberId, entry) => {
                       detailRef.current?.open(entry, () => removeFood(weekId, index, mt.key, familyMemberId, entry.id));
@@ -185,9 +267,13 @@ export function PlannerScreen() {
                       removeFood(weekId, index, mt.key, familyMemberId, entryId);
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     }}
-                    onRatingChange={(familyMemberId, rating) => {
-                      setEatingRating(weekId, index, mt.key, familyMemberId, rating);
-                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    onRatingPress={(familyMemberId, rating) => {
+                      const member = members.find((candidate) => candidate.id === familyMemberId);
+                      if (!member) return;
+                      eatingRatingRef.current?.open(member, rating, (newRating) => {
+                        setEatingRating(weekId, index, mt.key, familyMemberId, newRating);
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                      });
                     }}
                   />
                 ))}
@@ -199,20 +285,14 @@ export function PlannerScreen() {
 
       <FoodPickerSheet ref={pickerRef} />
       <FoodDetailSheet ref={detailRef} />
+      <EatingRatingSheet ref={eatingRatingRef} />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.md,
-  },
+  topBar: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.md },
   appTitle: { fontSize: 17, fontFamily: fontFamily.monoBold, letterSpacing: 1, color: colors.textPrimary },
   weekHeader: {
     flexDirection: 'row',
@@ -235,10 +315,34 @@ const styles = StyleSheet.create({
   dayLabel: { fontSize: 10, fontFamily: fontFamily.mono, letterSpacing: 0.5, color: colors.textSecondary },
   dayLabelActive: { color: colors.textOnPrimary },
   dayNum: { fontSize: 17, fontFamily: fontFamily.monoBold, color: colors.textPrimary, marginTop: 3 },
+  dayActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, marginBottom: spacing.md },
+  dayActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.xs,
+  },
+  dayActionText: { fontSize: 10, fontFamily: fontFamily.monoBold, letterSpacing: 0.4, textTransform: 'uppercase', color: colors.primary },
+  pasteButton: { backgroundColor: colors.primary, borderColor: colors.primary },
+  pasteButtonText: { fontSize: 10, fontFamily: fontFamily.monoBold, letterSpacing: 0.4, textTransform: 'uppercase', color: colors.textOnPrimary },
+  dayActionButtonDisabled: { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
+  dayActionTextDisabled: { color: colors.textSecondary },
   hudSection: { paddingHorizontal: spacing.lg, marginBottom: spacing.md },
   hudToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6 },
   hudToggleLabel: { fontSize: 11, fontFamily: fontFamily.monoBold, letterSpacing: 0.5, textTransform: 'uppercase', color: colors.textSecondary },
   hudCard: { backgroundColor: colors.surfaceMint, borderRadius: radius.lg, padding: spacing.lg, marginTop: spacing.sm },
+  goalsMemberRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md },
+  goalsMemberLabel: { fontSize: 10, fontFamily: fontFamily.monoBold, letterSpacing: 0.6, color: colors.textSecondary, marginRight: spacing.sm },
+  goalsMemberScroll: { flex: 1 },
+  goalsMemberList: { alignItems: 'center', paddingRight: spacing.sm },
+  goalsMemberButton: { alignItems: 'center', marginRight: spacing.md, maxWidth: 54 },
+  goalsMemberName: { fontSize: 9, fontFamily: fontFamily.mono, color: colors.textSecondary, marginTop: 3, textAlign: 'center' },
+  goalsMemberNameSelected: { color: colors.primary, fontFamily: fontFamily.monoBold },
   // Keep the calendar within the space left by the header and weekly-goals accordion.
   calendar: { flex: 1, minHeight: 0 },
   dayPage: { padding: spacing.lg, paddingTop: spacing.sm },

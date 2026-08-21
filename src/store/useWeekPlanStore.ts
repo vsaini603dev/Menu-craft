@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WeekPlan, MealSlot, MealType, FoodEntry, EatingRating } from '../types';
+import { generateId } from '../lib/id';
 
 const MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'snack', 'dinner'];
 
@@ -19,6 +20,41 @@ function blankWeek(weekId: string): WeekPlan {
   return { id: weekId, slots: emptySlots() };
 }
 
+// Ratings used to be emoji-oriented. Map persisted values to the new
+// reportable categories so existing plans remain usable after the upgrade.
+function migrateEatingRatings(persistedState: unknown) {
+  const state = persistedState as { plans?: Record<string, WeekPlan> };
+  if (!state?.plans) return persistedState;
+
+  const ratingMap: Record<string, EatingRating> = {
+    not_well: 'ate_little',
+    okay: 'ate_okay',
+    very_well: 'ate_very_well',
+    not_eaten: 'not_eaten',
+    ate_little: 'ate_little',
+    ate_okay: 'ate_okay',
+    ate_very_well: 'ate_very_well',
+  };
+
+  const plans = Object.fromEntries(
+    Object.entries(state.plans).map(([weekId, plan]) => [
+      weekId,
+      {
+        ...plan,
+        slots: plan.slots.map((slot) => ({
+          ...slot,
+          assignments: slot.assignments.map((assignment) => {
+            const rating = assignment.eatingRating ? ratingMap[assignment.eatingRating] : undefined;
+            return { ...assignment, eatingRating: rating };
+          }),
+        })),
+      },
+    ])
+  );
+
+  return { ...state, plans };
+}
+
 interface WeekPlanState {
   plans: Record<string, WeekPlan>;
   getPlan: (weekId: string) => WeekPlan;
@@ -31,6 +67,7 @@ interface WeekPlanState {
     familyMemberId: string,
     rating: EatingRating | undefined
   ) => void;
+  copyDay: (sourceWeekId: string, sourceDay: number, targetWeekId: string, targetDay: number) => void;
 }
 
 export const useWeekPlanStore = create<WeekPlanState>()(
@@ -92,7 +129,32 @@ export const useWeekPlanStore = create<WeekPlanState>()(
           });
           return { plans: { ...state.plans, [weekId]: { ...plan, slots } } };
         }),
+
+      copyDay: (sourceWeekId, sourceDay, targetWeekId, targetDay) =>
+        set((state) => {
+          const sourcePlan = state.plans[sourceWeekId] ?? blankWeek(sourceWeekId);
+          const targetPlan = state.plans[targetWeekId] ?? blankWeek(targetWeekId);
+          const slots = targetPlan.slots.map((slot) => {
+            if (slot.day !== targetDay) return slot;
+            const sourceSlot = sourcePlan.slots.find((candidate) => candidate.day === sourceDay && candidate.mealType === slot.mealType);
+            return {
+              ...slot,
+              // Copy the planned foods, but not eating ratings; ratings belong to the day they were recorded on.
+              assignments: (sourceSlot?.assignments ?? []).map((assignment) => ({
+                familyMemberId: assignment.familyMemberId,
+                foods: assignment.foods.map((entry) => ({
+                  ...entry,
+                  id: generateId('entry_'),
+                  adhoc: entry.adhoc
+                    ? { ...entry.adhoc, nutrients: entry.adhoc.nutrients ? [...entry.adhoc.nutrients] : undefined }
+                    : undefined,
+                })),
+              })),
+            };
+          });
+          return { plans: { ...state.plans, [targetWeekId]: { ...targetPlan, slots } } };
+        }),
     }),
-    { name: 'weekplan-store', storage: createJSONStorage(() => AsyncStorage) }
+    { name: 'weekplan-store', storage: createJSONStorage(() => AsyncStorage), version: 2, migrate: migrateEatingRatings }
   )
 );
